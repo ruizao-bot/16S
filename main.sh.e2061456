@@ -1,5 +1,0 @@
-mkdir: cannot create directory ‘/var/spool/pbs/mom_priv/Logs’: Permission denied
-mkdir: cannot create directory ‘/var/spool/pbs/mom_priv/Data’: Permission denied
-mkdir: cannot create directory ‘/var/spool/pbs/mom_priv/Results’: Permission denied
-mkdir: cannot create directory ‘/var/spool/pbs/mom_priv/Data’: Permission denied
-mkdir: cannot create directory ‘/var/spool/pbs/mom_priv/Data’: Permission denied

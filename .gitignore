@@ -22,6 +22,8 @@ Data/metadata/manifest.tsv
 *.log
 *.err
 *.out
+*.e*
+*.o*
 
 # Temp files
 tmp/
