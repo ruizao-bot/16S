@@ -26,3 +26,6 @@ Data/metadata/manifest.tsv
 # Temp files
 tmp/
 temp/
+
+# Downstream analysis
+*.R
