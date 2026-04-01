@@ -1,0 +1,28 @@
+# Raw sequencing data
+Data/raw_data/*
+!Data/raw_data/.gitkeep
+
+# Processed data outputs
+Data/processed_data/*
+!Data/processed_data/.gitkeep
+
+# Reference databases (too large for git)
+Data/reference_dbs/*
+!Data/reference_dbs/.gitkeep
+
+# Metadata with local absolute paths
+Data/metadata/manifest.tsv
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+
+# Logs
+*.log
+*.err
+*.out
+
+# Temp files
+tmp/
+temp/
