@@ -31,3 +31,6 @@ temp/
 
 # Downstream analysis
 *.R
+
+# Submitted scripts
+*.pbs
