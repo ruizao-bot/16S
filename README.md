@@ -40,6 +40,7 @@ This repository contains a checkpointed QIIME2 Bash workflow for paired-end 16S 
 - QIIME2 amplicon environment compatible with the pipeline
 - Paired-end manifest at `Data/raw_data/manifest.tsv`
 - Sample metadata at `Data/metadata/metadata.tsv` for grouped diversity visualizations
+- Classifier at `16S/Data/reference_dbs`, default is `silva-138-99-nb-classifier.qza`
 
 Step 1 uses the QIIME2 amplicon distribution below if the environment does not already exist:
 
