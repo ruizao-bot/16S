@@ -1,130 +1,188 @@
 # 16S rRNA Amplicon Sequencing Pipeline
 
-QIIME2-based pipeline for 16S rRNA amplicon analysis, including denoising, taxonomic classification, diversity analysis, and functional prediction.
+This repository contains a checkpointed QIIME2 Bash workflow for paired-end 16S amplicon data. The pipeline in `main.sh` covers environment setup, FASTQ import, demux QC, optional primer trimming, DADA2 denoising or OTU clustering, optional decontamination, taxonomic classification, and diversity analysis.
 
 ## Repository Structure
 
-```
+```text
 16S/
-├── main.sh              # Main QIIME2 pipeline (Steps 1–8)
-├── submit_16S.pbs       # PBS job submission wrapper (HPC)
-├── ggpicrust.R          # Functional pathway abundance analysis (PICRUSt2 output)
-├── mob_analysis.R       # Methane-oxidising bacteria stacked bar plot
-├── table_combine.R      # Merge feature table with taxonomic ranks
+├── main.sh                   # Main pipeline (steps 1–8)
+├── README.md                 # Usage notes
 ├── Data/
-│   ├── raw_data/        # Input FASTQ files + manifest.tsv
-│   ├── processed_data/  # Intermediate QIIME2 artifacts (.qza/.qzv)
-│   ├── reference_dbs/   # Classifier and reference sequences (not tracked in git)
-│   └── metadata/        # Sample metadata (metadata.tsv, decontam-metadata.tsv)
+│   ├── raw_data/             # FASTQ files + manifest.tsv
+│   ├── processed_data/       # Imported / trimmed QIIME2 artifacts
+│   ├── metadata/             # metadata.tsv and optional decontam metadata
+│   └── reference_dbs/        # Classifiers or reference reads/taxonomy
 ├── Results/
-│   ├── denoise_mode/    # DADA2 outputs (table, rep-seqs, taxonomy, diversity)
-│   └── cluster_mode/    # OTU clustering outputs
+│   ├── denoise_mode/         # DADA2 outputs
+│   └── cluster_mode/         # vsearch clustering outputs
 └── Logs/
-    ├── checkpoints/     # Step completion checkpoints
-    └── qiime2_pipeline.log
+    ├── checkpoints/          # Per-step checkpoint files
+    └── qiime2_pipeline.log   # Pipeline log
 ```
 
 ## Pipeline Steps
 
-| Step | Function |
-|------|----------|
-| 1 | Environment setup — create/verify `qiime2` conda environment |
-| 2 | Import paired-end FASTQ files via manifest |
-| 3 | Visualize demultiplexed reads (quality check) |
-| 4 | Primer removal with Cutadapt (optional) |
-| 5 | **Denoising** (DADA2) or **OTU clustering** (vsearch) |
-| 6 | Decontamination (optional, requires control samples) |
-| 7 | Taxonomic classification (SILVA classifier) |
-| 8 | Phylogenetic tree + alpha/beta diversity |
+| Step | Action | Notes |
+|------|--------|-------|
+| 1 | Environment setup | Verifies Conda and creates/uses `ENV_NAME` (default `qiime2`) |
+| 2 | Import data | Imports paired-end FASTQ from `Data/raw_data/manifest.tsv` |
+| 3 | Visualize demux | Produces `demux-paired-end.qzv` for quality review |
+| 4 | Remove primers | Optional; `PRIMER_CHOICE=1` uses 515F/806R, `2` uses custom primers, default skips |
+| 5 | Denoise or cluster | `MODE=denoise` runs DADA2; `MODE=cluster` runs the vsearch OTU workflow |
+| 6 | Decontamination | Enabled by default; requires metadata with a `control_status` column |
+| 7 | Taxonomic classification | Uses an existing classifier or builds one with RESCRIPt |
+| 8 | Tree + diversity | Builds a phylogeny and runs Shannon / unweighted UniFrac analyses |
 
-## Quick Start
+## Requirements
 
-### Local
+- Conda / Miniconda available on `PATH`
+- QIIME2 amplicon environment compatible with the pipeline
+- Paired-end manifest at `Data/raw_data/manifest.tsv`
+- Sample metadata at `Data/metadata/metadata.tsv` for grouped diversity visualizations
+
+Step 1 uses the QIIME2 amplicon distribution below if the environment does not already exist:
+
 ```bash
-# Run all steps
+mamba env create -f qiime_env.yml
+```
+
+## Required Input Files
+
+### `Data/raw_data/manifest.tsv`
+Expected tab-separated columns:
+
+```text
+sample-id	forward-absolute-filepath	reverse-absolute-filepath
+```
+
+### `Data/metadata/metadata.tsv`
+Used in step 8 for group significance and Emperor plots.
+
+### Optional decontam metadata
+If `DECONTAMINATION_CHOICE=1`, provide either:
+
+- `Data/metadata/decontam-metadata.tsv`, or
+- `Data/metadata/metadata.tsv`
+
+with a `control_status` column containing values such as `sample` and `control`.
+
+## Local Usage
+
+```bash
+bash main.sh [OPTIONS] [START_STEP]
+```
+
+### Common examples
+
+```bash
+# Run the full pipeline
 bash main.sh
 
 # Resume from step 5
 bash main.sh 5
 
-# OTU clustering mode instead of DADA2
+# Run clustering mode instead of DADA2
 bash main.sh -m cluster
 
 # Custom DADA2 truncation lengths and threads
 TRUNC_LEN_F=230 TRUNC_LEN_R=200 N_THREADS=16 bash main.sh
+
+# Use the built-in 515F/806R primers for trimming
+PRIMER_CHOICE=1 bash main.sh 4
+
+# Rebuild a classifier in the current environment and rerun taxonomy
+bash main.sh -r 7
+CLASSIFIER_CHOICE=2 bash main.sh 7
 ```
 
-### HPC (PBS)
+### Command-line options
+
+| Option | Meaning |
+|--------|---------|
+| `-h`, `--help` | Show help |
+| `-c`, `--clean` | Remove all checkpoints and the pipeline log |
+| `-s`, `--status` | Show step completion status |
+| `-d`, `--delete-intermediate` | Delete selected step 4/5 intermediate outputs |
+| `-r`, `--remove <N|name>` | Remove a specific checkpoint |
+| `-m`, `--mode <denoise|cluster>` | Select pipeline mode |
+| `-e`, `--env <name>` | Set the Conda environment name |
+| `START_STEP` | Resume from a step number `1`–`8` |
+
+## SLURM Usage
+
+An example job wrapper is provided in `run_qiime.slurm`:
+
 ```bash
-qsub submit_16S.pbs
-
-# Pass arguments (e.g. start from step 5)
-qsub -- submit_16S.pbs 5
+sbatch run_qiime.slurm
 ```
 
-PBS resources: 16 cores, 64 GB RAM, 24 h walltime.
+Current defaults in that wrapper:
 
-## Required Input
+- partition: `large_336`
+- CPUs: `8`
+- memory: `64G`
+- walltime: `24:00:00`
+- starts the pipeline from step `2`
 
-**`Data/raw_data/manifest.tsv`** — tab-separated file with columns:
-```
-sample-idforward-absolute-filepathreverse-absolute-filepath
-```
-
-**`Data/metadata/metadata.tsv`** — QIIME2 metadata file (required for diversity step). If running decontamination, add a `control_status` column (`sample` / `control`).
-
-## Reference Databases
-
-Place files in `Data/reference_dbs/`. The classifier is auto-detected in this order:
-
-1. `silva-138-99-nb-classifier.qza`
-2. `classifier.qza`
-3. `silva-v4-classifier.qza`
-4. `custom-classifier.qza`
-
-Download pre-trained SILVA 138 classifier:
-```bash
-wget -P Data/reference_dbs/ \
-  https://data.qiime2.org/2024.10/common/silva-138-99-nb-classifier.qza
-```
-
-## Key Options
+## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODE` | `denoise` | `denoise` (DADA2) or `cluster` (OTU) |
-| `ENV_NAME` | `qiime2` | Conda environment name |
-| `TRUNC_LEN_F` | `250` | DADA2 forward truncation length |
-| `TRUNC_LEN_R` | `250` | DADA2 reverse truncation length |
-| `N_THREADS` | `0` (auto) | Number of threads for DADA2 |
-| `PRIMER_CHOICE` | `3` (skip) | `1`=515F/806R, `2`=custom, `3`=skip |
-| `DECONTAMINATION_CHOICE` | `2` (skip) | `1`=run decontam, `2`=skip |
+| `ENV_NAME` | `qiime2` | Conda environment used by the pipeline |
+| `MODE` | `denoise` | `denoise` for DADA2 or `cluster` for vsearch OTU mode |
+| `TRUNC_LEN_F` | `250` | Forward truncation length for DADA2 |
+| `TRUNC_LEN_R` | `250` | Reverse truncation length for DADA2 |
+| `N_THREADS` | `0` | Threads for DADA2 (`0` lets QIIME decide) |
+| `PRIMER_CHOICE` | `3` | `1` = built-in 515F/806R, `2` = custom primers, other = skip |
+| `PRIMER_F` / `PRIMER_R` | unset | Custom primer sequences when `PRIMER_CHOICE=2` |
+| `CLUSTER_CHOICE` | `1` | Cluster mode: `1` de novo, `2` closed reference, `3` skip extra clustering |
+| `DECONTAMINATION_CHOICE` | `1` | `1` runs decontamination by default; set another value to skip |
+| `DECONTAM_METADATA` | unset | Optional explicit metadata path for decontam |
+| `DECONTAM_THRESHOLD` | `0.5` | Threshold for contaminant calling |
+| `REMOVE_CONTROLS` | `y` | Remove negative controls after decontam |
+| `CLASSIFIER_CHOICE` | `skip` | `1` = use `USER_CLASSIFIER`, `2` = build with RESCRIPt, otherwise skip if none found |
+| `USER_CLASSIFIER` | unset | Path to a classifier when `CLASSIFIER_CHOICE=1` |
+| `EXTRACT_PRIMERS` | `n` | When building a classifier, optionally extract reads matching `PRIMER_F` / `PRIMER_R` |
 
-## Checkpoint System
+## Reference Databases and Classifiers
 
-Completed steps are saved as checkpoints in `Logs/checkpoints/`. The pipeline skips already-completed steps automatically.
+Step 7 auto-detects the first existing classifier in this order:
+
+1. `Data/reference_dbs/silva-138-99-nb-classifier.qza`
+2. `Data/reference_dbs/classifier.qza`
+3. `Data/reference_dbs/silva-v4-classifier.qza`
+4. `Data/reference_dbs/custom-classifier.qza`
+
+If none is found, the script can:
+
+- use a user-supplied classifier with `CLASSIFIER_CHOICE=1 USER_CLASSIFIER=/path/to/file.qza`, or
+- build a new classifier with `CLASSIFIER_CHOICE=2` using RESCRIPt.
+
+> `silva-138-99-seqs-515-806.qza` is a reference-reads artifact, not a trained classifier. Step 7 needs a compatible `*-classifier.qza` or a rebuild via `CLASSIFIER_CHOICE=2`.
+
+> Pretrained classifiers must match the current QIIME2 / `scikit-learn` version. If you hit a version-mismatch error, rebuild the classifier in the active environment.
+
+## Checkpoints and Re-running Steps
+
+Each step writes a checkpoint to `Logs/checkpoints/`. On later runs, completed steps are skipped automatically.
 
 ```bash
-bash main.sh -s              # Show completion status
-bash main.sh -r 7            # Re-run step 7
-bash main.sh -c              # Reset all checkpoints (start fresh)
-bash main.sh -d              # Delete step 4/5 intermediate files
+bash main.sh -s      # show status
+bash main.sh -r 7    # remove step 7 checkpoint
+bash main.sh -c      # clear all checkpoints and log
+bash main.sh -d      # remove selected intermediate outputs
 ```
 
-## Downstream R Scripts
+If you change parameters, metadata, or classifiers, remove the relevant checkpoint before rerunning that step.
 
-- **`table_combine.R`** — Merges the exported feature table with taxonomy ranks into a single TSV (`final-table-with-ranks.tsv`)
-- **`mob_analysis.R`** — Generates stacked bar plots of methane-oxidising bacteria (MOB) from taxonomy results
-- **`ggpicrust.R`** — Extracts and visualises targeted functional pathways from PICRUSt2 output
+## Outputs
 
-## Dependencies
+Results are written under `Results/<mode>_mode/`, including:
 
-- [QIIME2](https://qiime2.org/) ≥ 2024.10 (amplicon distribution)
-- Conda / Miniconda3
-- R ≥ 4.0 with packages: `tidyverse`, `ggplot2`, `dplyr`, `readr`
+- `table.qza` / `rep-seqs.qza`
+- `taxonomy.qza`, `taxonomy.qzv`, `taxa-bar-plots.qzv`
+- `rooted-tree.qza` and exported Newick tree
+- `diversity/` outputs such as Shannon vectors, UniFrac distances, PCoA, and Emperor plots
 
-Install QIIME2 environment:
-```bash
-conda env create -n qiime2 \
-  --file https://raw.githubusercontent.com/qiime2/distributions/refs/heads/dev/2025.10/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml
-```
+QIIME2 visualizations (`.qzv`) can be viewed at <https://view.qiime2.org>.

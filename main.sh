@@ -3,7 +3,11 @@ set -euo pipefail
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ -d "${SCRIPT_DIR}/Data" ]]; then
+    PROJECT_DIR="${SCRIPT_DIR}"
+else
+    PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 DATA_DIR="${PROJECT_DIR}/Data"
 PROCESSED_DIR="${DATA_DIR}/processed_data"
 RESULTS_DIR="${PROJECT_DIR}/Results"
@@ -288,9 +292,9 @@ step5_cluster_from_demux() {
 # ── Step 6: Decontamination ───────────────────────────────────────────────────
 step6_decontamination() {
     check_checkpoint "step6_decontamination" && return 0
-    log "Step 6: Decontamination"
+    log "Step 6: Decontamination (DECONTAMINATION_CHOICE=${DECONTAMINATION_CHOICE:-1})"
 
-    if [[ "${DECONTAMINATION_CHOICE:-2}" != "1" ]]; then
+    if [[ "${DECONTAMINATION_CHOICE:-1}" != "1" ]]; then
         log "Skipping decontamination"
         create_checkpoint "step6_decontamination"; return 0
     fi
@@ -602,11 +606,11 @@ Positional:
   START_STEP  Step number 1-8 to resume from
 
 Examples:
-  bash code/main.sh                   # run all steps
-  bash code/main.sh 5                 # resume from step 5
-  bash code/main.sh -m cluster        # OTU clustering mode
-  bash code/main.sh -r 7              # re-run step 7
-  TRUNC_LEN_F=230 TRUNC_LEN_R=200 N_THREADS=16 bash code/main.sh
+  bash main.sh                        # run all steps
+  bash main.sh 5                      # resume from step 5
+  bash main.sh -m cluster             # OTU clustering mode
+  bash main.sh -r 7                   # re-run step 7
+  TRUNC_LEN_F=230 TRUNC_LEN_R=200 N_THREADS=16 bash main.sh
 EOF
 }
 

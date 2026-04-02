@@ -1,17 +1,12 @@
 # Raw sequencing data
-Data/raw_data/*
+Data/*
 !Data/raw_data/.gitkeep
-
-# Processed data outputs
-Data/processed_data/*
-!Data/processed_data/.gitkeep
-
-# Reference databases (too large for git)
-Data/reference_dbs/*
 !Data/reference_dbs/.gitkeep
-
-# Metadata with local absolute paths
-Data/metadata/manifest.tsv
+!Data/processed_data/.gitkeep
+!Data/metadata/.gitkeep
+# Results
+Results/*
+!Results/.gitkeep
 
 # OS / editor
 .DS_Store
@@ -19,6 +14,7 @@ Data/metadata/manifest.tsv
 *~
 
 # Logs
+Logs/*
 *.log
 *.err
 *.out
@@ -34,3 +30,4 @@ temp/
 
 # Submitted scripts
 *.pbs
+*.slurm
